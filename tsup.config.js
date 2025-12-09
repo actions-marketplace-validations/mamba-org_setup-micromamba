@@ -2,7 +2,7 @@ import { defineConfig } from 'tsup'
 
 export default defineConfig({
   entry: {
-    index: 'src/main.ts',
+    main: 'src/main.ts',
     post: 'src/post.ts'
   },
   dts: false,
@@ -17,9 +17,11 @@ export default defineConfig({
     '@actions/exec',
     '@actions/cache',
     '@actions/io',
-    'node-fetch',
+    '@actions/tool-cache',
     'untildify',
     'zod',
-    'fp-ts'
+    'fp-ts',
+    'js-yaml',
+    'which'
   ]
 })

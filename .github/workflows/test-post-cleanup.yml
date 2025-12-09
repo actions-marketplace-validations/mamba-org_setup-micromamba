@@ -1,7 +1,11 @@
 name: Test post cleanup
 
 on:
-  push
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  merge_group:
 
 jobs:
   test-post-cleanup:
@@ -11,27 +15,31 @@ jobs:
         include:
           - post-cleanup: 'none'
             mamba-init-block-exists: ''
+            mamba-activate-exists: ''
             env-exists: ''
             root-exists: ''
             binary-exists: ''
           - post-cleanup: 'shell-init'
             mamba-init-block-exists: '! '
+            mamba-activate-exists: '! '
             env-exists: ''
             root-exists: ''
             binary-exists: ''
           - post-cleanup: 'environment'
             mamba-init-block-exists: '! '
+            mamba-activate-exists: '! '
             env-exists: '! '
             root-exists: ''
             binary-exists: ''
           - post-cleanup: 'all'
             mamba-init-block-exists: '! '
+            mamba-activate-exists: '! '
             env-exists: '! '
             root-exists: '! '
             binary-exists: '! '
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       # This is a fork of webiny/action-post-run. If webiny/action-post-run is updated, this should be updated as well.
       - uses: lisanna-dettwyler/action-post-run@d053b9b43d788b87a409f6cdb3b6fc87c6c8a4fe
         with:
@@ -39,10 +47,11 @@ jobs:
             set -euxo pipefail
             ${{ matrix.mamba-init-block-exists }}grep -F "mamba initialize" ~/.bash_profile
             ${{ matrix.mamba-init-block-exists }}grep -F "mamba initialize" ~/.bashrc
+            ${{ matrix.mamba-activate-exists }}grep -F "mamba activate" ~/.bash_profile
             ${{ matrix.env-exists }}test -d ~/micromamba/envs/env-name
             ${{ matrix.root-exists }}test -d ~/micromamba
             ${{ matrix.binary-exists }}test -f ~/micromamba-bin/micromamba
-            ${{ matrix.binary-exists }}test -f ~/micromamba-bin/.condarc
+            ${{ matrix.binary-exists }}test -f ${{ runner.temp }}/setup-micromamba/.condarc
       - uses: ./
         with:
           environment-file: 'test/environment.yml'
@@ -52,7 +61,8 @@ jobs:
           set -euxo pipefail
           grep -F "mamba initialize" ~/.bash_profile
           grep -F "mamba initialize" ~/.bashrc
+          grep -F "mamba activate" ~/.bash_profile
           test -d ~/micromamba/envs/env-name
           test -d ~/micromamba
           test -f ~/micromamba-bin/micromamba
-          test -f ~/micromamba-bin/.condarc
+          test -f ${{ runner.temp }}/setup-micromamba/.condarc

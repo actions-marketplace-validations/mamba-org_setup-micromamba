@@ -7,11 +7,12 @@ GitHub Action to set up the [micromamba](https://github.com/mamba-org/mamba#micr
 ## Usage
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
-    micromamba-version: '1.3.1-0'
     environment-file: environment.yml
-    init-shell: '["bash", "powershell"]'
+    init-shell: >-
+      bash
+      powershell
     cache-environment: true
     post-cleanup: 'all'
 - name: Import numpy in micromamba environment (bash)
@@ -29,11 +30,23 @@ GitHub Action to set up the [micromamba](https://github.com/mamba-org/mamba#micr
 
 To see all available input arguments, see the [`action.yml`](action.yml) file.
 
+### Micromamba version
+
+You can specify the version of micromamba to be installed using the `micromamba-version` input.
+
+```yml
+- uses: mamba-org/setup-micromamba@v2
+  with:
+    # Any version from https://github.com/mamba-org/micromamba-releases
+    micromamba-version: '2.0.5-0'
+```
+
 ### Environment creation
 
 `setup-micromamba` allows you to create micromamba environments from an environment file or from a list of packages.
-You can use `environment-file`, `environment-specs` and `create-args` arguments to specify the environment creation.
-If you don't specify any of these arguments, `setup-micromamba` will skip the environment creation.
+You can use either `environment-file` or `create-args` arguments to specify an environment to be created.
+An environment name (other than `base`) must also be specified either in the environment file or via `environment-name`.
+If the environment is not fully specified then `setup-micromamba` will skip the environment creation and install only the `micromamba` executable.
 
 After the environment has been created, `setup-micromamba` will write `micromamba activate <env-name>` into the rc file of all shells that are [initialized](#shell-initialization).
 This will automatically activate the environment when the shell is started.
@@ -41,17 +54,32 @@ This will automatically activate the environment when the shell is started.
 #### Create environment from environment file
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     environment-file: environment.yml
 ```
+
+#### Create environment from `conda-lock` file
+
+Micromamba supports the `conda-lock` [unified lockfile format](https://conda.github.io/conda-lock/output/#unified-lockfile), but this format does not specify an environment name.
+Because `setup-micromamba` requires an environment name to be specified, config might look like this:
+
+```yml
+- uses: mamba-org/setup-micromamba@v2
+  with:
+    environment-file: conda-lock.yml
+    environment-name: ci
+```
+
+> [!NOTE]
+> Beware that `micromamba` does not allow additional packages to be installed into a locked environment and will ignore additional specs added by `create-args`, see [mamba#1760](https://github.com/mamba-org/mamba/issues/1760).
 
 #### Create environment from environment specs
 
 You can specify extra environment specs using the `create-args` input.
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     # the create command looks like this:
     # `micromamba create -n test-env python=3.10 numpy`
@@ -65,11 +93,12 @@ You can specify extra environment specs using the `create-args` input.
 
 You can specify custom arguments for the `micromamba create` command using the `create-args` input. See `micromamba create --help` for more information.
 
-> This is the same argument as in the [previous example](#create-environment-from-environment-specs) but with different semantics. 
+> [!NOTE]
+> This is the same argument as in the [previous example](#create-environment-from-environment-specs) but with different semantics.
 > This is because internally, `setup-micromamba` uses the `micromamba create` command to create the environment from the environment file and there, extra specs are specified by adding them as extra arguments to the `micromamba create` command.
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     environment-file: environment.yml
     create-args: -v
@@ -83,7 +112,7 @@ By default, it will create shell initialization scripts for `bash`.
 If you want to customize this, you can use the `init-shell` input.
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     init-shell: bash
 ```
@@ -93,7 +122,7 @@ In case you don't want to initialize your shell, you can set `init-shell` to `no
 You can also specify multiple shells by separating them with a space (or using the `>-` YAML block scalar)
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     init-shell: >-
       bash
@@ -110,13 +139,15 @@ Please read [about login shells](#about-login-shells) for more information about
 With this, you don't need to initialize your shell and activate the environment which may come in handy for self-hosted runners that persist between jobs.
 You can set this behavior by specifying the `generate-run-shell` input (defaults to `true`).
 
-> Under the hood, this shell wrapper runs `micromamba run -r <root-prefix-path> -n <env-name> <command>` with `<command>` being a file containing the part that you specify in the `run:` section of your workflow. 
+> [!NOTE]
+> Under the hood, this shell wrapper runs `micromamba run -r <root-prefix-path> -n <env-name> <command>` with `<command>` being a file containing the part that you specify in the `run:` section of your workflow.
 > See the [official documentation](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#custom-shell) and [ADR 0277](https://github.com/actions/runner/blob/main/docs/adrs/0277-run-action-shell-options.md) for more information about how the `shell:` input works in GitHub Actions.
 
-> ⚠️ Only available on macOS and Linux.
+> [!WARNING]
+> Only available on macOS and Linux.
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     generate-run-shell: true
     environment-file: environment.yml
@@ -135,18 +166,19 @@ To specify custom channels or other micromamba settings, you may want to use `.c
 When you specify `condarc-file`, `setup-micromamba` will use this file for all micromamba commands.
 
 When you specify `condarc`, `setup-micromamba` will create a `.condarc` next to the micromamba binary (to not mess with the `~/.condarc` that may be overwritten on self-hosted runners) and use this file for all micromamba commands.
+The action will also set the `CONDARC` environment variable to point to this file.
 
 If nothing is specified, `setup-micromamba` will create a `.condarc` next to the micromamba binary with `conda-forge` as the only channel.
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     environment-file: environment.yml
     condarc-file: /path/to/.condarc
 ```
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     environment-file: environment.yml
     condarc: |
@@ -162,11 +194,12 @@ If you want to cache your micromamba environment or packages, you can do this by
 
 If `cache-environment` is set to `true` and `cache-environment-key` is not specified, `setup-micromamba` will use the default cache key (`micromamba-environment`). Similar behavior applies to `cache-downloads` and `cache-downloads-key`.
 
+> [!NOTE]
 > Note that the specified cache key is only the prefix of the real cache key.
 > `setup-micromamba` will append a hash of the environment file and the `custom-args` as well as the environment name and OS to the cache key.
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     environment-file: environment.yml
     # only cache environment
@@ -175,7 +208,7 @@ If `cache-environment` is set to `true` and `cache-environment-key` is not speci
 ```
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     environment-file: environment.yml
     # persist only for runs on this commit.
@@ -187,7 +220,7 @@ If `cache-environment` is set to `true` and `cache-environment-key` is not speci
 - name: Get current date
   id: date
   run: echo "date=$(date +%Y-%m-%d)" >> "${GITHUB_OUTPUT}"
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     environment-file: environment.yml
     # persist on the same day.
@@ -207,7 +240,7 @@ The first one is the debug logging of the action itself.
 This can be enabled by running the action with the `ACTIONS_STEP_DEBUG` environment variable set to `true`.
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba2v2
   env:
     ACTIONS_STEP_DEBUG: true
 ```
@@ -225,22 +258,26 @@ The second type is the debug logging of the micromamba executable.
 This can be specified by setting the `log-level` input.
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     environment-file: environment.yml
     # supports off, critical, error, warning, info, debug, trace
     log-level: debug
 ```
 
-If nothing is specified, `setup-micromamba` will default to `info` or `debug` depending on if [debug logging is enabled for the action](#debug-logging-of-the-action).
+If nothing is specified, `setup-micromamba` will default to `warning` or `debug` depending on if [debug logging is enabled for the action](#debug-logging-of-the-action).
 
-### Post action cleanup
+### Self-hosted runners
 
-On self hosted runners, it may happen that some files are persisted between jobs.
+On self-hosted runners, it may happen that some files are persisted between jobs.
 This can lead to problems when the next job is run.
-To avoid this, you can use the `post-cleanup` input to specify the post cleanup behavior of the action (i.e., what happens _after_ all your commands have been executed).
+
+#### Post-action cleanup
+
+To avoid persistence between jobs, you can use the `post-cleanup` input to specify the post cleanup behavior of the action (i.e., what happens _after_ all your commands have been executed).
 
 There is a total of 4 options:
+
 - `none`: No cleanup is performed.
 - `shell-init`: The shell initialization files are removed by executing `micromamba shell deinit -s <shell>`.
 - `environment`: Shell initialization files and the installed environment are removed.
@@ -249,10 +286,49 @@ There is a total of 4 options:
 If nothing is specified, `setup-micromamba` will default to `shell-init`.
 
 ```yml
-- uses: mamba-org/setup-micromamba@v1
+- uses: mamba-org/setup-micromamba@v2
   with:
     environment-file: environment.yml
     post-cleanup: environment
+```
+
+#### Specify the path of the micromamba binary
+
+You also might want to alter the default micromamba installation location to a temporary location. You can use `micromamba-binary-path: ${{ runner.temp }}/bin/micromamba` to do this.
+
+```yml
+- uses: mamba-org/setup-micromamba@v2
+  with:
+    environment-file: environment.yml
+    # ${{ runner.temp }}\Scripts\micromamba.exe on Windows
+    micromamba-binary-path: ${{ runner.temp }}/bin/micromamba
+```
+
+You can control the download behavior of micromamba with the options `download-micromamba` and `micromamba-binary-path`.
+
+| Micromamba on `$PATH` | `download-micromamba` | `micromamba-binary-path` | Behavior                        |
+|----------------|-----------------------|--------------------------|------------------------------------|
+| No             | unset                 | unset                    | Download to default location       |
+| No             | unset                 | set                      | Download to specified path         |
+| No             | false                 | unset                    | Error                              |
+| No             | false                 | set                      | Use binary (absolute path)         |
+| No             | true                  | unset                    | Download to default location       |
+| No             | true                  | set                      | Download to specified path         |
+| Yes            | unset                 | unset                    | Use binary (from PATH)             |
+| Yes            | unset                 | set                      | Download to specified path         |
+| Yes            | false                 | unset                    | Use binary (from PATH)             |
+| Yes            | false                 | set                      | Use binary (specified path)        |
+| Yes            | true                  | unset                    | Download to default location       |
+| Yes            | true                  | set                      | Download to specified path         |
+
+```yml
+- uses: mamba-org/setup-micromamba@v2
+  with:
+    environment-file: environment.yml
+    download-micromamba: false
+    # you don't need to specify this if micromamba is already on PATH
+    micromamba-binary-path: /usr/local/bin/micromamba
+    generate-run-shell: false # this would generate a file next to the micromamba binary
 ```
 
 ## More examples
@@ -267,7 +343,7 @@ Due to a [security limitation of GitHub Actions](https://docs.github.com/en/acti
 any caches created on a branch will not be available on the main/parent branch
 after merging. This also applies to PRs.
 
-In contrast, branches *can* use a cache created on the main/parent branch. 
+In contrast, branches *can* use a cache created on the main/parent branch.
 
 See also [this thread](https://github.com/mamba-org/provision-with-micromamba/issues/42#issuecomment-1062007161).
 
@@ -281,19 +357,19 @@ Please see [this comment for now](https://github.com/mamba-org/provision-with-mi
 
 ## About login shells...
 
-Some shells require special syntax (e.g. `bash -l {0}`). You can set this up with the `defaults` option:
+Some shells require special syntax (e.g. `bash -leo pipefail {0}`). You can set this up with the `defaults` option:
 
 ```yaml
 jobs:
   myjob:
     defaults:
       run:
-        shell: bash -l {0}
+        shell: bash -leo pipefail {0}
 
 # or top-level:
 defaults:
   run:
-    shell: bash -l {0}
+    shell: bash -leo pipefail {0}
 jobs:
   ...
 ```
@@ -301,7 +377,7 @@ jobs:
 Find the reasons below (taken from [setup-miniconda](https://github.com/conda-incubator/setup-miniconda/blob/master/README.md#important)):
 
 - Bash shells do not use `~/.profile` or `~/.bashrc` so these shells need to be
-  explicitly declared as `shell: bash -l {0}` on steps that need to be properly
+  explicitly declared as `shell: bash -leo pipefail {0}` on steps that need to be properly
   activated (or use a default shell). This is because bash shells are executed
   with `bash --noprofile --norc -eo pipefail {0}` thus ignoring updated on bash
   profile files made by `micromamba shell init bash`.
@@ -312,8 +388,8 @@ Find the reasons below (taken from [setup-miniconda](https://github.com/conda-in
   disabled execution of `Command Processor/Autorun` Windows registry keys, which
   is what `micromamba shell init cmd.exe` sets.
 
-For further information, see 
-[`jobs.<job_id>.steps[*].shell`](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell) 
+For further information, see
+[`jobs.<job_id>.steps[*].shell`](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell)
 and [this thread](https://github.com/orgs/community/discussions/25061).
 
 ## Development
