@@ -1,6 +1,5 @@
 import * as fs from 'fs/promises'
 import * as os from 'os'
-import type { BinaryLike } from 'crypto'
 import { createHash } from 'crypto'
 import * as yaml from 'js-yaml'
 import * as coreDefault from '@actions/core'
@@ -9,16 +8,12 @@ import { match } from 'fp-ts/Either'
 import { pipe } from 'fp-ts/function'
 import * as z from 'zod'
 import { coreMocked } from './mocking'
+import { resolveMicromambaDownload, type ResolvedMicromambaDownload } from './micromamba-version'
 import type { LogLevelType, MicromambaSourceType, Options } from './options'
 
 const core = process.env.MOCKING ? coreMocked : coreDefault
 
-const getMicromambaUrlFromVersion = (arch: string, version: string) => {
-  if (version === 'latest') {
-    return `https://github.com/mamba-org/micromamba-releases/releases/latest/download/micromamba-${arch}`
-  }
-  return `https://github.com/mamba-org/micromamba-releases/releases/download/${version}/micromamba-${arch}`
-}
+export type { ResolvedMicromambaDownload }
 
 export const getCondaArch = () => {
   const archDict: Record<string, string> = {
@@ -27,7 +22,8 @@ export const getCondaArch = () => {
     'linux-x64': 'linux-64',
     'linux-arm64': 'linux-aarch64',
     'linux-ppc64': 'linux-ppc64le',
-    'win32-x64': 'win-64'
+    'win32-x64': 'win-64',
+    'win32-arm64': 'win-arm64'
   }
   const arch = archDict[`${os.platform()}-${os.arch()}`]
   if (!arch) {
@@ -73,19 +69,19 @@ export const determineEnvironmentName = (environmentName?: string, environmentFi
 export const mambaRegexBlock =
   /\n# >>> mamba initialize >>>(?:\n|\r\n)?([\s\S]*?)# <<< mamba initialize <<<(?:\n|\r\n)?/
 
-export const getMicromambaUrl = (micromambaSource: MicromambaSourceType) => {
+export const resolveMicromambaSource = (micromambaSource: MicromambaSourceType): Promise<ResolvedMicromambaDownload> => {
   return pipe(
     micromambaSource,
     match(
-      (version) => getMicromambaUrlFromVersion(getCondaArch(), version),
-      (url) => url
+      (version) => resolveMicromambaDownload(version, getCondaArch()),
+      (url) => Promise.resolve({ source: 'direct', url })
     )
   )
 }
 
-export const sha256 = (s: BinaryLike) => createHash('sha256').update(s).digest('hex')
+export const sha256 = (s: string | NodeJS.ArrayBufferView) => createHash('sha256').update(s).digest('hex')
 
-export const sha256Short = (s: BinaryLike) => sha256(s).slice(0, 7)
+export const sha256Short = (s: string | NodeJS.ArrayBufferView) => sha256(s).slice(0, 7)
 
 export const micromambaCmd = (options: Options, command: string, logLevel?: LogLevelType, condarcFile?: string) => {
   let commandArray = [options.micromambaBinPath].concat(command.split(' '))
